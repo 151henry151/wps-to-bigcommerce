@@ -1,10 +1,10 @@
 #!/usr/bin/python
 
 import requests, json, sys
-
+import getpass
 
 wps_dealer_id = raw_input('WPS Dealer ID:')
-wps_password = raw_input('WPS password:')
+wps_password = getpass.getpass('WPS password:')
 
 # WPS credentials and path
 WPS_URL = 'https://www.wpswebservices.com/version2/wsPRODUCT.pgm'
