@@ -2,6 +2,9 @@
 
 import requests, json, sys
 import getpass
+#import urllib3.contrib.pyopenssl
+#urllib3.contrib.pyopenssl.inject_into_urllib3()
+
 
 wps_dealer_id = raw_input('WPS Dealer ID:')
 wps_password = getpass.getpass('WPS password:')
