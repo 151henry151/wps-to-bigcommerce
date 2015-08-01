@@ -10,7 +10,7 @@ wps_dealer_id = raw_input('WPS Dealer ID:')
 wps_password = getpass.getpass('WPS password:')
 
 # WPS credentials and path
-WPS_URL = 'https://www.wpswebservices.com/version2/wsPRODUCT.pgm'
+WPS_URL = 'https://api.wpswebservices.com'
 DEALER_ID = wps_dealer_id
 PASSWORD = wps_password
 DEBUG = True
@@ -30,13 +30,13 @@ OVERWRITE = True
  
 # Dictionary for converting WPS properties to BigCommerce properties
 conversion_dict = {
-    'iname': 'name',
-    'listprc': 'price',
-    'itmweight': 'weight',
+    'description': 'name',
+    'list_pric': 'price',
+    'estimated_weight': 'weight',
     #'producttype': 'categories',
-    'mainimg': 'mainimg',
-    'longdesc': 'description',
-    'prtnmbr': 'sku',
+    'image': 'mainimg',
+    'catalog_description': 'description',
+    'id': 'sku',
     'brand_id': 'brand_id'
 }
  
@@ -66,17 +66,17 @@ def create_category(name):
         return get_category_id(name)
  
 def get_part_info(pn):
-    # Create POST data
-    data = {'dealer': DEALER_ID, 'password': PASSWORD, 'prtnmbr': pn, 'output': 'json'}
-    
+    # Create the url
+    part_url = WPS_URL + '/item/%s' % pn
+
     # Send request
-    part_response = requests.post(WPS_URL, data=data)
+    part_response = requests.post(WPS_URL, auth=(DEALER_ID, PASSWORD))
     
-    # Convert JSON response and return docs array
+    # Convert JSON response and return part info
     try:
         response =  part_response.json()
-        #if DEBUG:
-        #    print response
+        if DEBUG:
+            print response
         return response['response'].get('docs', None)
     
     # If malformed response or error, return None
@@ -115,80 +115,71 @@ def get_brand_id(name):
             return None
     except:
         return None
- 
-def create_item(pd):
-    if pd.get('vname', None):
-        pd['brand_id'] = create_brand(pd['vname'])
- 
+
+def wps_item_to_bc(wps_item):
     # Swap out compatible keys and remove incompatible keys
-    print "Creating item: %s" % (pd['iname'],)
-    for k in pd.keys():
+    bc_item = {}
+    print "Converting item: %s" % (wps_item['description'],)
+    for k in wps_item.keys():
         if k in conversion_dict.keys() and k != conversion_dict[k]:
-            pd[conversion_dict[k]] = pd[k]
-            pd.pop(k)
-        elif k not in conversion_dict.values():
-            pd.pop(k)
+            bc_item[conversion_dict[k]] = wps_item[k]
     
     # Add some product properties
-    pd['availability'] = 'available'
-    pd['is_visible'] = True
-    pd['type'] = 'physical'
-    pd['categories'] = [CATID,]
+    bc_item['availability'] = 'available'
+    bc_item['is_visible'] = True
+    bc_item['type'] = 'physical'
+    bc_item['categories'] = [CATID,]
     
-    if 'weight' not in pd.keys():
-        pd['weight'] = 0
-    
-    # Fix description (WPS returns description as an array instead of a string)
-    if pd.get('description', None):
-        pd['description'] = pd['description'][0]
-    
-    # Replace category names with category IDs
-    #if (pd.get('categories', None)):
-    #    for i, cat_name in enumerate(pd['categories']):
-    #        cat_id1 = get_category_id(cat_name) 
-    #        if not cat_id1:
-    #            print 'Creating category %s' % (cat_name,)
-    #            cat_id1 = create_category(cat_name)
-    #        pd['categories'][i] = cat_id1
+    # If weight is None , set it to 0
+    if not bc_item['weight']:
+        bc_item['weight'] = 0
+
+    return bc_item
  
+
+def create_item(pd):
+    if pd.get('vendor', None):
+        pd['brand_id'] = create_brand(pd['vendor']['name'])
     
     # Remove mainimg property after setting image_filename
     image_filename = pd.get('mainimg', '')
     if image_filename:
         pd.pop('mainimg')
+
+    bigComerce_item = wps_item_to_bc(pd)
     
     # Create BigCommerce product
-    rp = requests.post(BIG_STORE_URL % ('products.json',), data=json.dumps(pd), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
+    rp = requests.post(BIG_STORE_URL % ('products.json',), data=json.dumps(bigComerce_item), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
     
     # Check for success
     if rp.status_code == 201:
-        print "Item %s created" % (pd['name'],)
+        print "Item %s created" % (bigComerce_item['name'],)
         if image_filename:
             product_id = rp.json()['id']
             add_image(image_filename, product_id)
     
     elif rp.status_code == 409 and not OVERWRITE:
-        print "Cannot continue. Item %s already exists" % (pd['name'],)
+        print "Cannot continue. Item %s already exists" % (bigComerce_item['name'],)
     
     elif rp.status_code == 409 and OVERWRITE:
-        print "Item %s already exists. Overwriting..." % (pd['name'],)
-        existing_product = requests.get(BIG_STORE_PRODUCT_URL, params={'name': pd['name']}, headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
+        print "Item %s already exists. Overwriting..." % (bigComerce_item['name'],)
+        existing_product = requests.get(BIG_STORE_PRODUCT_URL, params={'name': bigComerce_item['name']}, headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
         existing_product = existing_product.json()
         product_id = existing_product[0]['id']
         requests.delete(BIG_API + 'products/%s.json' % (product_id,),
                         headers = BIG_HEADERS, auth = (BIG_USER, BIG_KEY))
-        print 'Deleted item %s' % (pd['name'],)
-        rp = requests.post(BIG_STORE_PRODUCT_URL, data=json.dumps(pd), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
+        print 'Deleted item %s' % (bigComerce_item['name'],)
+        rp = requests.post(BIG_STORE_PRODUCT_URL, data=json.dumps(bigComerce_item), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
         
         # Get product ID and add image if one exists
         if image_filename:
             product_id = rp.json()['id']
             add_image(image_filename, product_id)
         
-        print "Item %s created" % (pd['name'],)
+        print "Item %s created" % (bigComerce_item['name'],)
     elif DEBUG:
         print rp.text
-        print 'Could not create item %s' % (pd['name'],)
+        print 'Could not create item %s' % (bigComerce_item['name'],)
  
 if __name__ == '__main__':
     if len(sys.argv) > 2:
@@ -203,10 +194,9 @@ if __name__ == '__main__':
             part_number = part_number.rstrip('\n')
             part_info = get_part_info(part_number)
             if part_info:
-                for part in part_info:
-                    if DEBUG:
-                        print "Name: " + part['iname']
-                    create_item(part)
+                if DEBUG:
+                    print "Name: " + part['description']
+                create_item(part)
     else:
         print 'Correct syntax is import.py categoryname FILE.TXT\nFILE.TXT is a plain text file with a part number on each line'
  
