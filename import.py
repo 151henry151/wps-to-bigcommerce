@@ -10,7 +10,7 @@ wps_dealer_id = raw_input('WPS Dealer ID:')
 wps_password = getpass.getpass('WPS password:')
 
 # WPS credentials and path
-WPS_URL = 'https://api.wpswebservices.com'
+WPS_URL = 'http://api.wpswebservices.com'
 DEALER_ID = wps_dealer_id
 PASSWORD = wps_password
 DEBUG = True
