@@ -35,7 +35,6 @@ conversion_dict = {
     'list_price': 'price',
     'estimated_weight': 'weight',
     #'producttype': 'categories',
-    'image': 'mainimg',
     'catalog_description': 'description',
     'id': 'sku',
     'brand_id': 'brand_id'
@@ -92,6 +91,9 @@ def add_image(image_name, product_id):
     image_data = {'image_file': IMAGE_LOCATION + '%s' % (image_name,)}
     image_info = requests.post(BIG_API + 'products/%s/images.json' % (product_id,),
                                data=json.dumps(image_data), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
+    if DEBUG:
+        print "[DEBUG] Add Image Response"
+        print "[DEBUG]", image_info.text
  
 def create_brand(brand_name):
     if brand_name in brand_dictionary.keys():
@@ -152,12 +154,12 @@ def create_item(pd):
         pd['brand_id'] = create_brand(pd['vendor']['name'])
     
     # Remove mainimg property after setting image_filename
-    image_filename = pd.get('mainimg', '')
+    image_filename = pd.get('image', '')
     if image_filename:
-        pd.pop('mainimg')
+        pd.pop('image')
 
     bigComerce_item = wps_item_to_bc(pd)
-    
+
     # Create BigCommerce product
     rp = requests.post(BIG_STORE_URL % ('products.json',), data=json.dumps(bigComerce_item), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
     
