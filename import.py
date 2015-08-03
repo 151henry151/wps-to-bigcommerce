@@ -136,6 +136,9 @@ def wps_item_to_bc(wps_item):
     # If weight is None , set it to 0
     if not bc_item['weight']:
         bc_item['weight'] = 0
+
+    if not bc_item['description']:
+        bc_item['description'] = ""
     
     if DEBUG:
         print "[DEBUG] Part data: ",
