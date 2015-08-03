@@ -32,7 +32,7 @@ OVERWRITE = True
 # Dictionary for converting WPS properties to BigCommerce properties
 conversion_dict = {
     'description': 'name',
-    'list_pric': 'price',
+    'list_price': 'price',
     'estimated_weight': 'weight',
     #'producttype': 'categories',
     'image': 'mainimg',
