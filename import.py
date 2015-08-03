@@ -2,6 +2,7 @@
 
 import requests, json, sys
 import getpass
+from pprint import pprint
 #import urllib3.contrib.pyopenssl
 #urllib3.contrib.pyopenssl.inject_into_urllib3()
 
@@ -27,7 +28,7 @@ BRAND_IMAGE = 'http://162.243.58.11/comingsoon.jpg'
  
 # Script stuff
 OVERWRITE = True
- 
+
 # Dictionary for converting WPS properties to BigCommerce properties
 conversion_dict = {
     'description': 'name',
@@ -70,19 +71,21 @@ def get_part_info(pn):
     part_url = WPS_URL + '/item/%s' % pn
 
     # Send request
-    part_response = requests.post(WPS_URL, auth=(DEALER_ID, PASSWORD))
+    part_response = requests.get(part_url, auth=(DEALER_ID, PASSWORD))
     
     # Convert JSON response and return part info
     try:
         response =  part_response.json()
         if DEBUG:
-            print response
-        return response['response'].get('docs', None)
+            print "[DEBUG] Response of request %s" % part_url
+            print "[DEBUG]", response
+        return response
     
     # If malformed response or error, return None
     except:
         if DEBUG:
-            print part_response.text
+            print "[DEBUG] [ERROR] Error on %s" % part_response.url
+            print "[DEBUG] [ERROR]", part_response.text
         return None
  
 def add_image(image_name, product_id):
@@ -96,7 +99,7 @@ def create_brand(brand_name):
     brand_data = {'name': brand_name, 'image_file': BRAND_IMAGE}
     rp = requests.post(BIG_API + 'brands.json', data=json.dumps(brand_data), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
     if rp.status_code == 201:
-        print 'Created brand %s' % (brand_name,)
+        print '[LOG] Created brand %s' % (brand_name,)
         b_id =  rp.json()['id']
         brand_dictionary[brand_name] = b_id
         return b_id
@@ -119,7 +122,7 @@ def get_brand_id(name):
 def wps_item_to_bc(wps_item):
     # Swap out compatible keys and remove incompatible keys
     bc_item = {}
-    print "Converting item: %s" % (wps_item['description'],)
+    print "[LOG] Converting item: %s" % (wps_item['description'],)
     for k in wps_item.keys():
         if k in conversion_dict.keys() and k != conversion_dict[k]:
             bc_item[conversion_dict[k]] = wps_item[k]
@@ -133,7 +136,11 @@ def wps_item_to_bc(wps_item):
     # If weight is None , set it to 0
     if not bc_item['weight']:
         bc_item['weight'] = 0
-
+    
+    if DEBUG:
+        print "[DEBUG] Part data: ",
+        pprint(bc_item)
+    
     return bc_item
  
 
@@ -153,22 +160,22 @@ def create_item(pd):
     
     # Check for success
     if rp.status_code == 201:
-        print "Item %s created" % (bigComerce_item['name'],)
+        print "[LOG] Item %s created" % (bigComerce_item['name'],)
         if image_filename:
             product_id = rp.json()['id']
             add_image(image_filename, product_id)
     
     elif rp.status_code == 409 and not OVERWRITE:
-        print "Cannot continue. Item %s already exists" % (bigComerce_item['name'],)
+        print "[LOG] Cannot continue. Item %s already exists" % (bigComerce_item['name'],)
     
     elif rp.status_code == 409 and OVERWRITE:
-        print "Item %s already exists. Overwriting..." % (bigComerce_item['name'],)
+        print "[LOG] Item %s already exists. Overwriting..." % (bigComerce_item['name'],)
         existing_product = requests.get(BIG_STORE_PRODUCT_URL, params={'name': bigComerce_item['name']}, headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
         existing_product = existing_product.json()
         product_id = existing_product[0]['id']
         requests.delete(BIG_API + 'products/%s.json' % (product_id,),
                         headers = BIG_HEADERS, auth = (BIG_USER, BIG_KEY))
-        print 'Deleted item %s' % (bigComerce_item['name'],)
+        print '[LOG] Deleted item %s' % (bigComerce_item['name'],)
         rp = requests.post(BIG_STORE_PRODUCT_URL, data=json.dumps(bigComerce_item), headers = BIG_HEADERS, auth=(BIG_USER, BIG_KEY))
         
         # Get product ID and add image if one exists
@@ -176,10 +183,10 @@ def create_item(pd):
             product_id = rp.json()['id']
             add_image(image_filename, product_id)
         
-        print "Item %s created" % (bigComerce_item['name'],)
+        print "[LOG] Item %s created" % (bigComerce_item['name'],)
     elif DEBUG:
-        print rp.text
-        print 'Could not create item %s' % (bigComerce_item['name'],)
+        print "[DEBUG]", rp.text
+        print '[DEBUG] Could not create item %s' % (bigComerce_item['name'],)
  
 if __name__ == '__main__':
     if len(sys.argv) > 2:
@@ -195,8 +202,8 @@ if __name__ == '__main__':
             part_info = get_part_info(part_number)
             if part_info:
                 if DEBUG:
-                    print "Name: " + part['description']
-                create_item(part)
+                    print "[DEBUG] Name: " + part_info['description']
+                create_item(part_info)
     else:
         print 'Correct syntax is import.py categoryname FILE.TXT\nFILE.TXT is a plain text file with a part number on each line'
  
